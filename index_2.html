@@ -1,0 +1,713 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Заявки на звіти</title>
+<meta name="robots" content="noindex">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700&family=Unbounded:wght@600&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+/* Layout: sticky top bar + one working area (board / list / form / load / how) + right-side drawer for a request card */
+:root{
+  --bg:#EEF2F1; --surface:#FFFFFF; --surface-2:#F6F8F7; --ink:#14201E; --muted:#5A6A67; --line:#D8E0DE;
+  --accent:#0E6B63; --accent-ink:#FFFFFF; --accent-soft:#DCEFEC;
+  --p1:#C0392B; --p1-soft:#FBE3E0; --p2:#C46A12; --p2-soft:#FCEBD7; --p3:#3C5A80; --p3-soft:#E1E9F4; --p4:#6B7472; --p4-soft:#ECEFEE;
+  --st-new:#2F6FD0; --st-clarify:#B7791F; --st-queued:#5F6F8A; --st-progress:#0E6B63; --st-review:#7B4BC4; --st-done:#2E8540; --st-rejected:#8A8F8E;
+  --demo:#8A5A00; --demo-soft:#FFF1CC;
+  --shadow:0 10px 30px rgba(14,40,36,.14);
+  --f-display:"Unbounded","Golos Text",system-ui,sans-serif;
+  --f-body:"Golos Text",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0F1514; --surface:#172020; --surface-2:#1C2726; --ink:#E4ECEA; --muted:#93A4A0; --line:#2A3735;
+  --accent:#4CC2B6; --accent-ink:#06211E; --accent-soft:#163633;
+  --p1:#F07A6C; --p1-soft:#3A1E1B; --p2:#F0A55A; --p2-soft:#3A2A16; --p3:#8DB0E0; --p3-soft:#1D2A3B; --p4:#A3ADAB; --p4-soft:#232C2B;
+  --st-new:#7AA8F0; --st-clarify:#E6B154; --st-queued:#A2B0C8; --st-progress:#4CC2B6; --st-review:#B89AF0; --st-done:#6CCB7E; --st-rejected:#8F9998;
+  --demo:#F2C14E; --demo-soft:#3A2F12; --shadow:0 10px 30px rgba(0,0,0,.5); color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0F1514; --surface:#172020; --surface-2:#1C2726; --ink:#E4ECEA; --muted:#93A4A0; --line:#2A3735;
+  --accent:#4CC2B6; --accent-ink:#06211E; --accent-soft:#163633;
+  --p1:#F07A6C; --p1-soft:#3A1E1B; --p2:#F0A55A; --p2-soft:#3A2A16; --p3:#8DB0E0; --p3-soft:#1D2A3B; --p4:#A3ADAB; --p4-soft:#232C2B;
+  --st-new:#7AA8F0; --st-clarify:#E6B154; --st-queued:#A2B0C8; --st-progress:#4CC2B6; --st-review:#B89AF0; --st-done:#6CCB7E; --st-rejected:#8F9998;
+  --demo:#F2C14E; --demo-soft:#3A2F12; --shadow:0 10px 30px rgba(0,0,0,.5); color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:14px;line-height:1.45}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:30;background:var(--surface)}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.wrap{padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.mono{font-family:var(--f-mono);font-size:12px;letter-spacing:.02em}
+
+/* top bar */
+.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;background:var(--surface);border-bottom:1px solid var(--line)}
+.top-in{display:flex;align-items:center;gap:16px;padding-block:10px;flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:10px;margin-right:auto}
+.brand-mark{width:30px;height:30px;border-radius:8px;background:var(--accent);color:var(--accent-ink);display:grid;place-items:center;font-family:var(--f-display);font-size:13px}
+.brand b{font-family:var(--f-display);font-weight:600;font-size:15px;letter-spacing:.01em}
+.brand small{display:block;color:var(--muted);font-size:12px}
+.who{display:flex;align-items:center;gap:8px}
+.who label{color:var(--muted);font-size:12px}
+.who select{padding:6px 8px;border:1px solid var(--line);border-radius:8px;background:var(--surface-2);max-width:240px}
+.bell{position:relative;border:1px solid var(--line);background:var(--surface-2);border-radius:8px;padding:6px 10px;display:flex;align-items:center;gap:6px}
+.bell .dot{min-width:18px;height:18px;border-radius:9px;background:var(--p1);color:#fff;font-size:11px;display:grid;place-items:center;padding:0 5px;font-weight:600}
+nav.tabs{display:flex;gap:2px;overflow-x:auto;padding-bottom:0}
+nav.tabs a{padding:10px 12px;text-decoration:none;color:var(--muted);border-bottom:2px solid transparent;white-space:nowrap;font-weight:500}
+nav.tabs a.on{color:var(--ink);border-bottom-color:var(--accent)}
+nav.tabs a.cta{color:var(--accent);font-weight:600}
+
+main{padding-block:20px 60px}
+h1{font-family:var(--f-display);font-weight:600;font-size:20px;margin:0 0 4px;text-wrap:balance}
+h2{font-size:16px;margin:0 0 10px}
+.sub{color:var(--muted);margin:0 0 18px;max-width:70ch}
+.demo-note{display:flex;gap:8px;align-items:flex-start;background:var(--demo-soft);color:var(--ink);border-radius:10px;padding:10px 12px;margin-bottom:16px;font-size:13px;max-width:900px}
+.demo-note b{color:var(--demo)}
+
+/* chips & pills */
+.pill{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;padding:2px 8px;border-radius:999px;white-space:nowrap}
+.pill::before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor}
+.prio{display:inline-block;font-family:var(--f-mono);font-size:11px;padding:2px 6px;border-radius:5px;font-weight:500}
+.prio.P1{background:var(--p1-soft);color:var(--p1)} .prio.P2{background:var(--p2-soft);color:var(--p2)}
+.prio.P3{background:var(--p3-soft);color:var(--p3)} .prio.P4{background:var(--p4-soft);color:var(--p4)}
+.prio.none{background:var(--surface-2);color:var(--muted);border:1px dashed var(--line)}
+.tag-demo{font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--demo);background:var(--demo-soft);padding:1px 6px;border-radius:4px}
+.dept{font-size:12px;color:var(--muted)}
+.ava{width:24px;height:24px;border-radius:50%;display:inline-grid;place-items:center;font-size:11px;font-weight:700;background:var(--accent-soft);color:var(--accent)}
+.ava.none{background:var(--surface-2);color:var(--muted);border:1px dashed var(--line)}
+
+/* board */
+.board-scroll{overflow-x:auto;padding-bottom:8px}
+.board{display:grid;grid-template-columns:repeat(6,minmax(230px,1fr));gap:12px;min-width:1440px}
+.col{background:var(--surface-2);border:1px solid var(--line);border-radius:12px;padding:10px;display:flex;flex-direction:column;gap:8px;min-height:200px}
+.col.drop{outline:2px dashed var(--accent);outline-offset:-4px}
+.col-h{display:flex;align-items:center;justify-content:space-between;padding:2px 2px 4px}
+.col-h .n{font-family:var(--f-mono);color:var(--muted);font-size:12px}
+.col-hint{font-size:11.5px;color:var(--muted);margin:-4px 2px 2px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 11px;display:flex;flex-direction:column;gap:7px;text-align:left;width:100%}
+.card:hover{border-color:var(--accent)}
+.card[draggable="true"]{cursor:grab}
+.card .t{font-weight:600;line-height:1.3}
+.card .row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.card .foot{display:flex;align-items:center;gap:8px;justify-content:space-between}
+.card .hrs{font-family:var(--f-mono);font-size:11.5px;color:var(--muted)}
+.card.q{box-shadow:inset 3px 0 0 var(--st-clarify)}
+.empty-col{font-size:12px;color:var(--muted);text-align:center;padding:16px 4px}
+
+/* list */
+.filters{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.filters select,.filters input{padding:7px 9px;border:1px solid var(--line);border-radius:8px;background:var(--surface)}
+.filters input{flex:1 1 200px;min-width:0}
+.tbl-wrap{overflow-x:auto;background:var(--surface);border:1px solid var(--line);border-radius:12px}
+table{border-collapse:collapse;width:100%;min-width:860px}
+th,td{padding:9px 12px;text-align:left;border-bottom:1px solid var(--line);vertical-align:middle}
+th{font-size:11.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:600;background:var(--surface-2)}
+tbody tr{cursor:pointer} tbody tr:hover{background:var(--surface-2)}
+td.num{font-family:var(--f-mono);font-size:12px;font-variant-numeric:tabular-nums}
+
+/* form */
+.form{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:20px;max-width:880px;display:grid;gap:18px}
+.fs{display:grid;gap:12px}
+.fs-h{display:flex;align-items:baseline;gap:10px;border-bottom:1px solid var(--line);padding-bottom:6px}
+.fs-h span{font-family:var(--f-mono);font-size:11px;color:var(--accent)}
+.fs-h b{font-size:14px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.fld{display:grid;gap:5px;min-width:0}
+.fld label{font-weight:600;font-size:13px}
+.fld .hint{font-size:12px;color:var(--muted)}
+.fld input,.fld select,.fld textarea{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--surface-2)}
+.fld textarea{min-height:84px;resize:vertical}
+.req::after{content:" *";color:var(--p1)}
+.seg{display:flex;flex-wrap:wrap;gap:6px}
+.seg input{position:absolute;opacity:0;pointer-events:none}
+.seg label{font-weight:500;border:1px solid var(--line);border-radius:8px;padding:6px 10px;cursor:pointer;background:var(--surface-2);font-size:13px}
+.seg input:checked+label{border-color:var(--accent);background:var(--accent-soft);color:var(--accent);font-weight:600}
+.seg input:focus-visible+label{outline:2px solid var(--accent);outline-offset:2px}
+.drop-zone{border:1.5px dashed var(--line);border-radius:10px;padding:14px;text-align:center;color:var(--muted);background:var(--surface-2)}
+.thumbs{display:flex;gap:8px;flex-wrap:wrap}
+.thumb{display:flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:8px;padding:4px 8px;font-size:12px;background:var(--surface)}
+.thumb img{width:34px;height:34px;object-fit:cover;border-radius:4px}
+.btn{border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:8px 14px;font-weight:600}
+.btn.pri{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.btn.warn{color:var(--p1);border-color:var(--p1-soft)}
+.btn.sm{padding:5px 10px;font-size:13px}
+.actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+
+/* load */
+.load-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px}
+.kv{display:flex;gap:18px;flex-wrap:wrap;margin:6px 0 10px}
+.kv div{display:grid}
+.kv b{font-family:var(--f-mono);font-size:18px;font-variant-numeric:tabular-nums}
+.kv span{font-size:12px;color:var(--muted)}
+.mini{display:grid;gap:6px}
+.mini button{display:flex;gap:8px;align-items:center;border:1px solid var(--line);border-radius:8px;background:var(--surface-2);padding:6px 8px;text-align:left}
+.mini button span.t{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* how */
+.how{display:grid;gap:16px;max-width:980px}
+.flow{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px}
+.step{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px}
+.step .no{font-family:var(--f-mono);font-size:11px;color:var(--accent)}
+.step b{display:block;margin:2px 0 4px}
+.step p{margin:0;color:var(--muted);font-size:13px}
+.legend{display:grid;gap:6px}
+.legend div{display:grid;grid-template-columns:150px 1fr;gap:10px;align-items:start}
+.legend p{margin:0;color:var(--muted);font-size:13px}
+.arch{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}
+.arch .panel b{display:block;margin-bottom:4px}
+.arch .panel p,.arch .panel li{color:var(--muted);font-size:13px;margin:0}
+.arch ul{margin:0;padding-left:18px}
+
+/* drawer */
+.scrim{position:fixed;inset:0;background:rgba(10,20,18,.38);z-index:40}
+.drawer{position:fixed;top:0;right:0;bottom:0;width:min(640px,100%);background:var(--surface);z-index:41;box-shadow:var(--shadow);display:flex;flex-direction:column;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);padding-right:env(safe-area-inset-right,0px)}
+.d-head{padding:14px 18px;border-bottom:1px solid var(--line);display:grid;gap:6px}
+.d-head .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.d-head h2{font-size:18px;margin:0;text-wrap:balance}
+.x{margin-left:auto;border:1px solid var(--line);background:var(--surface-2);border-radius:8px;width:32px;height:32px}
+.d-body{overflow-y:auto;padding:16px 18px;display:grid;gap:18px;align-content:start}
+.sec-h{font-size:11.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:700;margin:0 0 8px}
+dl.facts{display:grid;grid-template-columns:150px 1fr;gap:6px 12px;margin:0}
+dl.facts dt{color:var(--muted);font-size:13px}
+dl.facts dd{margin:0;min-width:0;overflow-wrap:anywhere}
+.text-block{background:var(--surface-2);border-radius:8px;padding:10px 12px;white-space:pre-wrap;overflow-wrap:anywhere}
+.analyst{background:var(--accent-soft);border-radius:12px;padding:12px;display:grid;gap:10px}
+.analyst .grid2 .fld input,.analyst .grid2 .fld select{background:var(--surface)}
+.callout{border-radius:10px;padding:10px 12px;display:grid;gap:8px}
+.callout.review{background:color-mix(in srgb,var(--st-review) 14%,var(--surface))}
+.callout.clarify{background:color-mix(in srgb,var(--st-clarify) 16%,var(--surface))}
+.thread{display:grid;gap:10px}
+.msg{display:grid;grid-template-columns:28px 1fr;gap:8px}
+.msg .b{background:var(--surface-2);border-radius:10px;padding:8px 10px;min-width:0}
+.msg .b.question{background:color-mix(in srgb,var(--st-clarify) 18%,var(--surface));}
+.msg .meta{font-size:12px;color:var(--muted);display:flex;gap:8px;flex-wrap:wrap;margin-bottom:2px}
+.msg .meta b{color:var(--ink)}
+.msg .txt{white-space:pre-wrap;overflow-wrap:anywhere}
+.sys{font-size:12px;color:var(--muted);padding-left:36px}
+.compose{display:grid;gap:8px}
+.compose textarea{width:100%;min-height:70px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--surface-2);resize:vertical}
+.chk{display:flex;gap:6px;align-items:center;font-size:13px}
+
+/* notifications popover */
+.pop{position:fixed;top:calc(env(safe-area-inset-top,0px) + 60px);right:max(16px,env(safe-area-inset-right,0px));width:min(420px,calc(100% - 32px));max-height:70vh;overflow:auto;background:var(--surface);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow);z-index:35;padding:12px;display:grid;gap:8px;align-content:start}
+.note{border-bottom:1px solid var(--line);padding-bottom:8px;display:grid;gap:3px}
+.note .meta{font-size:11.5px;color:var(--muted);display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.ch{font-size:10.5px;font-weight:700;padding:1px 5px;border-radius:4px;background:var(--p3-soft);color:var(--p3)}
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:10px;z-index:60;font-weight:500;max-width:calc(100% - 32px)}
+
+@media (max-width:640px){
+  .grid2{grid-template-columns:1fr}
+  dl.facts{grid-template-columns:1fr}
+  dl.facts dt{margin-top:6px}
+  .legend div{grid-template-columns:1fr}
+  .brand small{display:none}
+}
+@media (prefers-reduced-motion:no-preference){.drawer{animation:slide .18s ease-out}@keyframes slide{from{transform:translateX(24px);opacity:.6}}}
+</style>
+</head>
+<body>
+<style>
+/* --- доповнення для робочої версії --- */
+[hidden]{display:none!important}
+html,body{margin:0}
+img{max-width:100%}
+.me{display:flex;align-items:center;gap:8px;font-size:13px}
+.me small{display:block;color:var(--muted);font-size:11.5px}
+nav.tabs button{padding:10px 12px;border:0;background:none;color:var(--muted);border-bottom:2px solid transparent;white-space:nowrap;font-weight:500}
+nav.tabs button.on{color:var(--ink);border-bottom-color:var(--accent)}
+nav.tabs button.cta{color:var(--accent);font-weight:600}
+.busy{position:fixed;top:0;left:0;right:0;height:3px;z-index:70;background:linear-gradient(90deg,transparent,var(--accent),transparent);background-size:200% 100%;animation:bar 1s linear infinite}
+@keyframes bar{from{background-position:200% 0}to{background-position:-200% 0}}
+.gate{max-width:520px;margin:12vh auto;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:24px;display:grid;gap:10px}
+.files a{color:var(--accent)}
+.refresh{border:1px solid var(--line);background:var(--surface-2);border-radius:8px;padding:6px 10px}
+.btn[disabled]{opacity:.55;cursor:progress}
+.fld{align-content:start}
+a.btn{text-decoration:none;display:inline-block}
+.single{max-width:760px;margin:0 auto;background:var(--surface);border:1px solid var(--line);border-radius:14px;overflow:hidden}
+/* адміністрування */
+.adm{display:grid;gap:20px}
+.adm-h{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+.adm-h h2{margin:0;margin-right:auto}
+.role{font-size:11.5px;font-weight:600;padding:2px 8px;border-radius:999px;background:var(--surface-2);border:1px solid var(--line);white-space:nowrap}
+.role.r-lead{background:var(--accent-soft);color:var(--accent);border-color:transparent}
+.role.r-analyst{background:var(--p3-soft);color:var(--p3);border-color:transparent}
+.off td{opacity:.5}
+.off td.keep{opacity:1}
+.row-acts{display:flex;gap:6px;flex-wrap:wrap}
+.linkbox{display:flex;gap:6px}
+.linkbox input{flex:1;min-width:0;padding:7px 9px;border:1px solid var(--line);border-radius:8px;background:var(--surface-2);font-family:var(--f-mono);font-size:12px}
+.dept-list{display:grid;gap:6px}
+.dept-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:8px 12px}
+.dept-row .nm{flex:1 1 200px;min-width:0;font-weight:600}
+.dept-row .nm input{width:100%;padding:6px 8px;border:1px solid var(--accent);border-radius:6px;background:var(--surface-2)}
+.dept-row .st{font-size:12px;color:var(--muted);font-family:var(--f-mono)}
+.dept-row.off{opacity:.55}
+.add-dept{display:flex;gap:8px;flex-wrap:wrap}
+.add-dept input{flex:1 1 220px;min-width:0;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--surface)}
+.warn-box{background:var(--p2-soft);color:var(--ink);border-radius:10px;padding:10px 12px;font-size:13px}
+table.users{min-width:900px}
+</style>
+
+<div id="busy" class="busy" hidden></div>
+<header class="top" id="top" hidden>
+  <div class="wrap top-in">
+    <div class="brand"><div class="brand-mark">AN</div><div><b>Заявки на звіти</b><small>Відділ аналітики</small></div></div>
+    <button class="refresh" id="refresh" title="Оновити дані">Оновити</button>
+    <div class="me"><span class="ava" id="meAva"></span><div><b id="meName"></b><small id="meTitle"></small></div></div>
+  </div>
+  <nav class="tabs wrap" id="tabs">
+    <button data-v="board">Дошка</button>
+    <button data-v="mine">Мої</button>
+    <button data-v="list">Усі заявки</button>
+    <button data-v="load" data-analyst="1">Навантаження</button>
+    <button data-v="how">Як це працює</button>
+    <button data-v="admin" data-lead="1">Адміністрування</button>
+    <button data-v="new" class="cta">+ Нова заявка</button>
+  </nav>
+</header>
+<main class="wrap" id="app"><div class="gate"><b>Завантаження…</b></div></main>
+<div id="scrim" class="scrim" hidden></div>
+<aside id="drawer" class="drawer" hidden aria-label="Картка заявки"></aside>
+<div id="toast" class="toast" hidden></div>
+
+<script>
+// ▼▼▼ Вставте сюди URL введення в дію Apps Script (закінчується на /exec) ▼▼▼
+const API_URL = "https://script.google.com/macros/s/AKfycbx9E3B_zvAnWPpQVlq3ptPn9FiHlNsDa8SM3SJsWSdQSZlfeMKXI0Cl2uC3n3xrPeZV/exec";
+// ▲▲▲
+const _q = new URLSearchParams(location.search);
+const _clean = v => String(v || "").replace(/[^A-Za-z0-9]/g, "");
+const TOKEN = _clean(_q.get("k")) || (_clean(_q.get("r")) ? "r_" + _clean(_q.get("r")) : "");
+const OPEN_ID = String(_q.get("id") || "").replace(/[^A-Za-z0-9-]/g, "");
+
+const S = { me: null, items: [], analysts: [], names: {}, D: null, view: "board", open: null,
+  filters: { dept: "", status: "", who: "", q: "" }, files: [], busy: 0, draft: {} };
+
+const $ = s => document.querySelector(s);
+const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const fmt = ts => { if (!ts) return "—"; const d = new Date(ts); return d.toLocaleDateString("uk-UA", { day: "2-digit", month: "2-digit", year: "2-digit" }) + " " + d.toLocaleTimeString("uk-UA", { hour: "2-digit", minute: "2-digit" }); };
+const ymd = s => { const m = String(s || "").match(/^(\d{4})-(\d{2})-(\d{2})$/); return m ? m[3] + "." + m[2] + "." + m[1] : (s || "—"); };
+const ago = ts => { if (!ts) return "—"; const m = Math.round((Date.now() - ts) / 60000); if (m < 1) return "щойно"; if (m < 60) return m + " хв тому"; const h = Math.round(m / 60); if (h < 24) return h + " год тому"; return Math.round(h / 24) + " дн тому"; };
+const isLead = () => S.me && S.me.role === "lead";
+const isHead = () => S.me && S.me.role === "customer";
+const isGuest = () => S.me && (S.me.role === "public" || S.me.role === "requester");
+const isAnalyst = () => S.me && (S.me.role === "lead" || S.me.role === "analyst");
+const nameOf = id => S.names[id] || id || "—";
+const initials = id => id ? String(nameOf(id)).slice(0, 1) : "?";
+const SL = () => S.D.status;
+const pillSt = k => `<span class="pill" style="color:var(--st-${k});background:color-mix(in srgb,var(--st-${k}) 13%,transparent)">${SL()[k] || k}</span>`;
+const prioTag = p => p ? `<span class="prio ${p}">${p}</span>` : `<span class="prio none">P?</span>`;
+const hrs = v => v === "" || v == null ? "—" : v;
+const PR = { P1: 1, P2: 2, P3: 3, P4: 4 };
+const byPrio = (a, b) => (PR[a.prio] || 9) - (PR[b.prio] || 9) || a.created - b.created;
+const isOwner = it => S.me && (S.me.id === it.createdBy || (S.me.role === "customer" && S.me.dept === it.dept));
+const isMine = it => isAnalyst() ? it.who === S.me.id : true;
+const STATUS_ORDER = ["new", "clarify", "queued", "progress", "review", "done", "rejected"];
+const HINT = { new: "Чекає розбору аналітиком", clarify: "Є питання до замовника", queued: "Оцінено, чекає виконавця", review: "Замовник перевіряє результат" };
+
+function toast(t) { const el = $("#toast"); el.textContent = t; el.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => el.hidden = true, 3200); }
+function setBusy(on) { S.busy += on ? 1 : -1; $("#busy").hidden = S.busy <= 0; document.querySelectorAll("[data-busy]").forEach(b => b.disabled = S.busy > 0); }
+
+function call(action, payload) {
+  if (!(window.google && google.script && google.script.run)) {
+    // інтерфейс розміщено окремо — звертаємось до Apps Script як до API
+    return fetch(API_URL, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify({ token: TOKEN, action, payload: payload || {} }) })
+      .then(r => r.text(), () => { throw new Error("Немає зв'язку з сервером. Перевірте інтернет і спробуйте ще раз"); })
+      .then(t => { let o; try { o = JSON.parse(t); } catch (e) { throw new Error("Сервер відповів не так, як очікувалось. Перевірте API_URL і налаштування доступу «Усі»"); } if (!o.ok) throw new Error(o.error); return o.data; });
+  }
+  return new Promise((res, rej) => {
+    google.script.run
+      .withSuccessHandler(r => { let o; try { o = JSON.parse(r); } catch (e) { return rej(new Error("Некоректна відповідь сервера")); } o.ok ? res(o.data) : rej(new Error(o.error)); })
+      .withFailureHandler(e => rej(new Error((e && e.message) || "Помилка з'єднання")))
+      .api(TOKEN, action, payload || {});
+  });
+}
+async function act(action, payload, okMsg) {
+  setBusy(true);
+  try { const st = await call(action, payload); apply(st); if (okMsg) toast(typeof okMsg === "function" ? okMsg(st) : okMsg); return st; }
+  catch (e) { if (e.message === "NO_ACCESS") return noAccess(); toast(e.message); render(); throw e; }
+  finally { setBusy(false); }
+}
+function apply(st) { S.me = st.me; S.items = st.items; S.analysts = st.analysts; S.names = st.names; S.D = st.dicts; S.admin = st.admin; render(); }
+function noAccess() {
+  $("#top").hidden = true;
+  $("#app").innerHTML = `<div class="gate"><h1>Немає доступу</h1><p class="sub" style="margin:0">Посилання застаріло або доступ вимкнено. Щоб подати заявку, відкрийте загальне посилання на систему заявок; якщо ви керівник відділу — попросіть Юлію надіслати нове персональне посилання.</p></div>`;
+}
+
+/* ---------- views ---------- */
+function render() {
+  if (!S.me) return;
+  $("#top").hidden = false;
+  const guest = isGuest();
+  $("#tabs").hidden = guest; $("#refresh").hidden = S.me.role === "public"; $(".me").hidden = guest;
+  if (S.me.role === "public") { if (S.view !== "new" || !$("#nf")) { S.view = "new"; $("#app").innerHTML = S.publicDone ? vDone() : vNew(); if (!S.publicDone) bindForm(); } return; }
+  if (S.me.role === "requester") { const it = S.items[0]; if (!it) return noAccess(); S.open = it.id;
+    $("#app").innerHTML = `<div class="single">${cardHtml(it, true)}</div>`; bindCard(it); return; }
+  $("#meName").textContent = S.me.name; $("#meTitle").textContent = S.me.title || S.me.dept || ""; $("#meAva").textContent = S.me.name.slice(0, 1);
+  const mineBtn = document.querySelector('#tabs button[data-v="mine"]'); if (mineBtn) mineBtn.textContent = isHead() ? "Мій відділ" : "Мої";
+  const listBtn = document.querySelector('#tabs button[data-v="list"]'); if (listBtn) listBtn.textContent = isHead() ? "Список" : "Усі заявки";
+  document.querySelectorAll("#tabs button").forEach(b => { b.classList.toggle("on", b.dataset.v === S.view); b.hidden = (b.dataset.analyst && !isAnalyst()) || (b.dataset.lead && !isLead()); });
+  if (S.view === "admin" && !isLead()) S.view = "board";
+  const v = { board: vBoard, mine: vMine, list: vList, new: vNew, load: vLoad, how: vHow, admin: vAdmin }[S.view] || vBoard;
+  if (S.view === "new" && $("#nf")) { /* форму не перемальовуємо, щоб не губити введене */ }
+  else { $("#app").innerHTML = v(); if (S.view === "new") bindForm(); }
+  if (S.open) renderDrawer(); else if (S.editUser) renderUserDrawer();
+}
+
+function card(it) {
+  return `<button class="card ${it.status === "clarify" ? "q" : ""}" data-open="${esc(it.id)}" ${isAnalyst() ? 'draggable="true"' : ""} data-id="${esc(it.id)}">
+    <div class="row"><span class="mono">${esc(it.id)}</span><span class="dept" style="margin-left:auto">${esc(S.D.types[it.type] || it.type)}</span></div>
+    <div class="t">${esc(it.title)}</div>
+    <div class="dept">${esc(it.dept)}</div>
+    <div class="foot"><span class="row">${prioTag(it.prio)}<span class="hrs">${hrs(it.est)} год</span></span>
+      <span class="ava ${it.who ? "" : "none"}" title="${esc(it.who ? nameOf(it.who) : "Не призначено")}">${esc(initials(it.who))}</span></div>
+  </button>`;
+}
+function vBoard() {
+  const cols = STATUS_ORDER.filter(k => k !== "rejected");
+  const doneCut = Date.now() - 14 * 864e5;
+  return `<h1>Дошка заявок</h1><p class="sub">${isAnalyst() ? "Перетягуйте картки між колонками, щоб змінити статус. Клік по картці відкриває деталі." : "Заявки вашого відділу в черзі аналітики: що в роботі, що чекає, що готово."} У колонці «Готово» — заявки за останні 14 днів.</p>
+  <div class="board-scroll"><div class="board">${cols.map(k => {
+    const its = S.items.filter(i => i.status === k && (k !== "done" || i.updated >= doneCut)).sort(byPrio);
+    return `<section class="col" data-col="${k}"><div class="col-h">${pillSt(k)}<span class="n">${its.length}</span></div>${HINT[k] ? `<div class="col-hint">${HINT[k]}</div>` : ""}
+      ${its.map(card).join("") || '<div class="empty-col">Порожньо</div>'}</section>`;
+  }).join("")}</div></div>`;
+}
+function table(its, emptyText) {
+  return `<div class="tbl-wrap"><table><thead><tr><th>№</th><th>Пріор.</th><th>Заявка</th><th>Відділ</th><th>Статус</th><th>Виконавець</th><th>Оцінка, год</th><th>Термін</th><th>Оновлено</th></tr></thead>
+  <tbody>${its.map(i => `<tr data-open="${esc(i.id)}"><td class="mono">${esc(i.id)}</td><td>${prioTag(i.prio)}</td><td><b>${esc(i.title)}</b><div class="dept">${esc(S.D.types[i.type] || "")} · ${esc(i.freq)}</div></td><td>${esc(i.dept)}</td><td>${pillSt(i.status)}</td><td>${i.who ? esc(nameOf(i.who)) : "—"}</td><td class="num">${hrs(i.est)}</td><td class="num">${ymd(i.due)}</td><td class="num">${ago(i.updated || i.created)}</td></tr>`).join("") || `<tr><td colspan="9" style="color:var(--muted)">${emptyText}</td></tr>`}</tbody></table></div>`;
+}
+function vMine() {
+  const its = S.items.filter(isMine);
+  const open = its.filter(i => !["done", "rejected"].includes(i.status)).sort(byPrio);
+  const closed = its.filter(i => ["done", "rejected"].includes(i.status)).sort((a, b) => b.updated - a.updated);
+  const waiting = isAnalyst() ? [] : open.filter(i => i.status === "clarify" || i.status === "review");
+  return `<h1>${isAnalyst() ? "Мої задачі" : "Заявки мого відділу"}</h1><p class="sub">${isAnalyst() ? "Заявки, де ви виконавець." : "Заявки, які подали ви і співробітники вашого відділу."}</p>
+   ${waiting.length ? `<div class="demo-note"><b>Чекають на вас: ${waiting.length}.</b><span>Питання від аналітика або результат, який треба перевірити.</span></div>` : ""}
+   <h2>Відкриті</h2>${table(open, "Відкритих заявок немає")}
+   <h2 style="margin-top:20px">Закриті</h2>${table(closed, "Поки що немає")}`;
+}
+function vList() {
+  const f = S.filters;
+  const its = S.items.filter(i => (!f.dept || i.dept === f.dept) && (!f.status || i.status === f.status) && (!f.who || (f.who === "none" ? !i.who : i.who === f.who)) && (!f.q || (i.title + " " + i.id + " " + i.desc).toLowerCase().includes(f.q.toLowerCase()))).sort(byPrio);
+  return `<h1>${isHead() ? "Заявки відділу" : "Усі заявки"}</h1><p class="sub">${isHead() ? "Усі заявки, які подали співробітники вашого відділу." : "Уся черга: заявки всіх відділів, пріоритети і статуси."}</p>
+  <div class="filters">
+    <input id="f-q" placeholder="Пошук за назвою чи номером" value="${esc(f.q)}">
+    <select id="f-dept"><option value="">Усі відділи</option>${S.D.allDepts.map(d => `<option ${f.dept === d ? "selected" : ""}>${esc(d)}</option>`).join("")}</select>
+    <select id="f-status"><option value="">Усі статуси</option>${STATUS_ORDER.map(k => `<option value="${k}" ${f.status === k ? "selected" : ""}>${SL()[k]}</option>`).join("")}</select>
+    <select id="f-who"><option value="">Усі виконавці</option>${S.analysts.map(a => `<option value="${esc(a.id)}" ${f.who === a.id ? "selected" : ""}>${esc(a.name)}</option>`).join("")}<option value="none" ${f.who === "none" ? "selected" : ""}>Не призначено</option></select>
+  </div>${table(its, "Нічого не знайдено за цими фільтрами")}`;
+}
+function vNew() {
+  const D = S.D, dept = S.me.role === "customer" ? S.me.dept : "", pub = S.me.role === "public", head = isHead();
+  const seg = (name, opts, checked) => `<div class="seg" role="radiogroup">${opts.map(([v, t], i) => `<input type="radio" name="${name}" id="${name}-${i}" value="${v}" ${v === checked ? "checked" : ""}><label for="${name}-${i}">${esc(t)}</label>`).join("")}</div>`;
+  return `<h1>${pub ? "Заявка на звіт для відділу аналітики" : "Нова заявка"}</h1><p class="sub">Чим точніше описана мета, тим швидше буде результат. Після відправки на пошту прийде посилання на вашу заявку — там видно статус і питання аналітика.</p>
+  <form class="form" id="nf" novalidate>
+   <div class="fs"><div class="fs-h"><span>01</span><b>Хто і що</b></div>
+    <div class="grid2">
+      ${head ? "" : `<div class="fld"><label class="${pub ? "req" : ""}" for="n-req">${pub ? "Ваше ім'я та прізвище" : "Замовник (ім'я)"}</label><input id="n-req" maxlength="100" autocomplete="name"></div>
+      <div class="fld"><label class="${pub ? "req" : ""}" for="n-email">${pub ? "Ваша пошта" : "Пошта замовника"}</label><input id="n-email" type="email" autocomplete="email" placeholder="name@gmail.com"><span class="hint">Сюди прийде посилання на заявку і сповіщення</span></div>`}
+      <div class="fld"><label class="req" for="n-dept">Відділ</label>${dept ? `<input id="n-dept" value="${esc(dept)}" disabled>` : `<select id="n-dept"><option value="">— оберіть відділ</option>${D.depts.map(d => `<option>${esc(d)}</option>`).join("")}</select>`}</div>
+      <div class="fld"><label for="n-contact">Телефон або Telegram</label><input id="n-contact" placeholder="Необов'язково"></div>
+      <input id="n-web" name="website" tabindex="-1" autocomplete="off" style="position:absolute;left:-5000px" aria-hidden="true">
+    </div>
+    <div class="fld"><label class="req">Тип заявки</label>${seg("n-type", Object.entries(D.types), "report")}</div>
+    <div class="fld"><label class="req" for="n-title">Назва</label><input id="n-title" maxlength="200" placeholder="Напр.: Щотижневий звіт по продажах нових SKU"></div>
+   </div>
+   <div class="fs"><div class="fs-h"><span>02</span><b>Навіщо</b></div>
+    <div class="fld"><label class="req" for="n-goal">Мета: яке рішення ви прийматимете на основі звіту?</label><textarea id="n-goal" placeholder="Напр.: щопонеділка вирішувати, які SKU виводити з матриці"></textarea></div>
+    <div class="fld"><label for="n-desc">Опис: показники, розрізи, фільтри</label><textarea id="n-desc" placeholder="Які колонки, за який період, по яких магазинах, з якою деталізацією"></textarea></div>
+   </div>
+   <div class="fs"><div class="fs-h"><span>03</span><b>Формат і терміни</b></div>
+    <div class="grid2">
+      <div class="fld"><label for="n-format">Бажаний формат</label><select id="n-format">${D.formats.map(f => `<option>${esc(f)}</option>`).join("")}</select></div>
+      <div class="fld"><label for="n-freq">Як часто потрібен</label><select id="n-freq">${D.freq.map(f => `<option>${esc(f)}</option>`).join("")}</select></div>
+      <div class="fld"><label for="n-wanted">Бажаний термін</label><input type="date" id="n-wanted"><span class="hint">Фінальний термін погоджує аналітик</span></div>
+      <div class="fld"><label for="n-sources">Звідки дані (якщо знаєте)</label><input id="n-sources" placeholder="1С, куб, файл від постачальника…"></div>
+    </div>
+    <div class="fld"><label class="req">Важливість для бізнесу</label>${seg("n-biz", Object.entries(D.biz), "norm")}</div>
+   </div>
+   <div class="fs"><div class="fs-h"><span>04</span><b>Матеріали</b></div>
+    <div class="fld"><label for="n-files">Скріншоти, приклади, чернетки (до 10 МБ кожен)</label>
+      <div class="drop-zone"><input type="file" id="n-files" multiple><div class="hint" style="margin-top:6px">Файли збережуться в окремій папці заявки на Google Диску</div></div>
+      <div class="thumbs" id="thumbs"></div></div>
+    <div class="fld"><label for="n-drive">Посилання на файл / приклад на Google Диску</label><input id="n-drive" placeholder="https://drive.google.com/…"></div>
+   </div>
+   <div class="actions"><button class="btn pri" type="submit" data-busy>Надіслати заявку</button><span class="hint" style="color:var(--muted);font-size:12px">* обов'язкові поля</span></div>
+  </form>`;
+}
+function bindForm() {
+  S.files = [];
+  $("#n-files").addEventListener("change", e => {
+    [...e.target.files].forEach(f => S.files.push(f));
+    e.target.value = "";
+    $("#thumbs").innerHTML = S.files.map((f, i) => `<span class="thumb">${f.type.startsWith("image/") ? `<img src="${URL.createObjectURL(f)}" alt="">` : ""}${esc(f.name)} <button type="button" class="x" style="width:22px;height:22px;margin:0" data-rmfile="${i}" aria-label="Прибрати">✕</button></span>`).join("");
+  });
+  $("#nf").addEventListener("submit", async e => {
+    e.preventDefault();
+    const v = id => ($(id) ? $(id).value.trim() : ""), rv = n => (document.querySelector(`input[name="${n}"]:checked`) || {}).value;
+    if (S.me.role === "public" && (!v("#n-req") || !v("#n-email"))) { toast("Вкажіть своє ім'я і пошту — на неї прийде посилання на заявку"); return; }
+    if (!v("#n-dept")) { toast("Оберіть відділ"); return; }
+    if (!v("#n-title") || !v("#n-goal")) { toast("Заповніть назву і мету — без мети аналітик не зможе оцінити заявку"); return; }
+    let files;
+    try { files = await readFiles(S.files); } catch (err) { toast(err.message); return; }
+    const p = { dept: v("#n-dept"), contact: v("#n-contact"), requester: v("#n-req"), requesterEmail: v("#n-email"), website: v("#n-web"), type: rv("n-type"), title: v("#n-title"), goal: v("#n-goal"), desc: v("#n-desc"),
+      format: v("#n-format"), freq: v("#n-freq"), wanted: v("#n-wanted"), sources: v("#n-sources"), biz: rv("n-biz"), drive: v("#n-drive"), files };
+    const st = await act("create", p, s => `Заявку ${s.lastId || ""} створено`).catch(() => null);
+    if (!st) return;
+    S.files = [];
+    if (S.me.role === "public") { S.publicDone = { id: st.lastId, link: st.lastLink }; $("#app").innerHTML = vDone(); window.scrollTo(0, 0); return; }
+    S.open = st.lastId || null; go("board");
+  });
+}
+function vDone() {
+  const d = S.publicDone;
+  return `<div class="gate"><h1>Заявку ${esc(d.id || "")} прийнято</h1>
+   <p class="sub" style="margin:0">На вашу пошту надіслано лист із посиланням на заявку. За ним видно статус, питання аналітика, і там же ви приймаєте готовий результат.</p>
+   ${d.link ? `<p style="margin:0"><a class="btn pri" href="${esc(d.link)}" target="_top">Відкрити мою заявку</a></p>` : ""}
+   <div class="actions"><button class="btn" data-act="public-again">Подати ще одну заявку</button></div></div>`;
+}
+function readFiles(list) {
+  return Promise.all(list.map(f => new Promise((res, rej) => {
+    if (f.size > 10 * 1024 * 1024) return rej(new Error(`Файл «${f.name}» більший за 10 МБ — завантажте його на Диск і додайте посилання`));
+    const r = new FileReader();
+    r.onload = () => res({ name: f.name, type: f.type || "application/octet-stream", data: String(r.result).split(",")[1] || "" });
+    r.onerror = () => rej(new Error("Не вдалося прочитати файл " + f.name));
+    r.readAsDataURL(f);
+  })));
+}
+function vLoad() {
+  const act_ = ["clarify", "queued", "progress", "review"];
+  const sum = (arr, f) => { const n = arr.map(i => parseFloat(i[f])).filter(x => !isNaN(x)); return n.length ? Math.round(n.reduce((a, b) => a + b, 0) * 10) / 10 : "—"; };
+  const mini = its => its.map(i => `<button data-open="${esc(i.id)}">${prioTag(i.prio)}<span class="t">${esc(i.title)}</span>${pillSt(i.status)}</button>`).join("");
+  const box = a => { const its = S.items.filter(i => i.who === a.id && act_.includes(i.status)).sort(byPrio);
+    return `<div class="panel"><div style="display:flex;gap:8px;align-items:center"><span class="ava">${esc(a.name.slice(0, 1))}</span><div><h2 style="margin:0">${esc(a.name)}</h2><div class="dept">${esc(a.title || "")}</div></div></div>
+    <div class="kv"><div><b>${its.length}</b><span>активних заявок</span></div><div><b>${sum(its, "est")}</b><span>оцінка, год</span></div><div><b>${sum(its, "spent")}</b><span>витрачено, год</span></div></div>
+    <div class="mini">${mini(its) || '<span class="dept">Немає активних заявок</span>'}</div></div>`; };
+  const un = S.items.filter(i => !i.who && !["done", "rejected"].includes(i.status)).sort(byPrio);
+  const depts = S.D.allDepts.map(d => ({ d, n: S.items.filter(i => i.dept === d && !["done", "rejected"].includes(i.status)).length })).filter(x => x.n);
+  return `<h1>Навантаження</h1><p class="sub">Скільки заявок і годин зараз на кожному аналітику. Години беруться з полів «Оцінка» і «Витрачено» в картках; якщо їх не вписано — «—».</p>
+  <div class="load-grid">${S.analysts.map(box).join("")}
+   <div class="panel"><h2>Без виконавця</h2><div class="mini">${mini(un) || '<span class="dept">Усі заявки розподілено</span>'}</div>
+   <h2 style="margin-top:14px">Відкриті заявки по відділах</h2><div class="mini">${depts.map(x => `<div style="display:flex;justify-content:space-between"><span>${esc(x.d)}</span><span class="mono">${x.n}</span></div>`).join("") || '<span class="dept">—</span>'}</div></div>
+  </div>`;
+}
+function vHow() {
+  const steps = [["Замовник подає заявку", "Форма з метою, описом, скрінами і посиланням на Диск. На пошту приходить номер AN-xxxx."],
+    ["Аналітик розбирає", "Ставить пріоритет P1–P4, оцінку в годинах, виконавця і термін. Або ставить питання — заявка йде в «Уточнення»."],
+    ["Виконавець працює", "Пише коментарі, вносить фактичні години."],
+    ["Перевірка замовником", "Аналітик вказує, де дивитись результат. Замовник отримує лист і натискає «Прийняти» або «Повернути»."],
+    ["Готово", "Заявку закрито, години зафіксовано."]];
+  const st = [["new", "Заявка подана, ще ніхто не розбирав."], ["clarify", "Аналітик чекає відповіді замовника. Щойно замовник відповість у коментарях — заявка повернеться в роботу."],
+    ["queued", "Оцінено і пріоритезовано, чекає на виконавця."], ["progress", "Виконавець працює."], ["review", "Результат готовий, вказано де дивитись. Чекає підтвердження замовника."],
+    ["done", "Замовник прийняв результат."], ["rejected", "Не робимо: дубль, уже є готовий звіт, або не в компетенції відділу."]];
+  return `<div class="how"><div><h1>Як це працює</h1><p class="sub">Шлях заявки від подання до готового звіту.</p></div>
+  <div class="flow">${steps.map((s, i) => `<div class="step"><span class="no">Крок ${i + 1}</span><b>${s[0]}</b><p>${s[1]}</p></div>`).join("")}</div>
+  <div class="panel"><h2>Статуси</h2><div class="legend">${st.map(([k, t]) => `<div>${pillSt(k)}<p>${t}</p></div>`).join("")}</div></div>
+  <div class="panel"><h2>Пріоритети</h2><div class="legend">
+   <div>${prioTag("P1")}<p>Помилка в діючому звіті або зупинка роботи. Береться одразу.</p></div>
+   <div>${prioTag("P2")}<p>Потрібно для рішень найближчим часом.</p></div>
+   <div>${prioTag("P3")}<p>Планова розробка, в порядку черги.</p></div>
+   <div>${prioTag("P4")}<p>Покращення «коли буде час».</p></div>
+   <p style="margin-top:6px">Замовник вказує важливість для бізнесу, а фінальний пріоритет ставить аналітик — з урахуванням усієї черги.</p></div></div></div>`;
+}
+
+/* ---------- drawer ---------- */
+function openCard(id) { S.editUser = null; S.open = id; renderDrawer(); }
+function closeCard() { S.open = null; S.editUser = null; $("#drawer").hidden = true; $("#scrim").hidden = true; }
+function renderDrawer() {
+  const it = S.items.find(i => i.id === S.open); if (!it) return closeCard();
+  $("#drawer").innerHTML = cardHtml(it, false);
+  $("#drawer").hidden = false; $("#scrim").hidden = false;
+  bindCard(it);
+}
+function cardHtml(it, single) {
+  const an = isAnalyst(), owner = isOwner(it), D = S.D;
+  const draft = $("#d-msg") ? $("#d-msg").value : (S.draft[it.id] || "");
+  void single;
+  const opt = (o, cur) => o.map(([v, t]) => `<option value="${esc(v)}" ${v === cur ? "selected" : ""}>${esc(t)}</option>`).join("");
+  const link = u => /^https?:\/\//.test(u) ? `<a href="${esc(u)}" target="_blank" rel="noopener">${esc(u)}</a>` : esc(u);
+  const facts = [["Відділ", esc(it.dept)], ["Подав", esc(it.requester || nameOf(it.createdBy))], ...(it.requesterEmail ? [["Пошта", esc(it.requesterEmail)]] : []), ["Телефон / Telegram", esc(it.contact) || "—"], ["Тип", esc(D.types[it.type] || "")], ["Формат", esc(it.format) || "—"], ["Періодичність", esc(it.freq) || "—"],
+    ["Бажаний термін", ymd(it.wanted)], ["Важливість", esc(D.biz[it.biz] || "—")], ["Джерела даних", esc(it.sources) || "—"],
+    ["Посилання", it.drive ? link(it.drive) : "—"],
+    ["Вкладення", it.files.length ? `<div class="files">${it.files.map(f => `<div><a href="${esc(f.url)}" target="_blank" rel="noopener">${esc(f.name)}</a></div>`).join("")}</div>` : "—"],
+    ["Папка заявки", it.folderUrl ? `<a href="${esc(it.folderUrl)}" target="_blank" rel="noopener">Відкрити на Google Диску</a>` : "—"], ["Створено", fmt(it.created)]];
+  const analystPanel = an ? `<div class="analyst"><p class="sec-h" style="margin:0">Робота аналітика</p>
+     <div class="grid2">
+      <div class="fld"><label for="d-status">Статус</label><select id="d-status">${opt(STATUS_ORDER.map(k => [k, SL()[k]]), it.status)}</select></div>
+      <div class="fld"><label for="d-prio">Пріоритет</label><select id="d-prio">${opt([["", "— не задано"], ["P1", "P1 — терміново"], ["P2", "P2 — високий"], ["P3", "P3 — плановий"], ["P4", "P4 — коли буде час"]], it.prio)}</select></div>
+      <div class="fld"><label for="d-who">Виконавець</label><select id="d-who">${opt([["", "— не призначено"], ...S.analysts.map(a => [a.id, a.name])], it.who)}</select></div>
+      <div class="fld"><label for="d-due">Плановий термін</label><input type="date" id="d-due" value="${esc(it.due)}"></div>
+      <div class="fld"><label for="d-est">Оцінка, год</label><input type="number" min="0" step="0.5" id="d-est" value="${esc(it.est)}"></div>
+      <div class="fld"><label for="d-spent">Витрачено, год</label><input type="number" min="0" step="0.5" id="d-spent" value="${esc(it.spent)}"></div>
+     </div>
+     <div class="fld"><label for="d-result">Де перевірити результат</label><input id="d-result" value="${esc(it.result)}" placeholder="Посилання на звіт або шлях: Power BI → робоча область → звіт"></div>
+   </div>` : `<dl class="facts"><dt>Пріоритет</dt><dd>${prioTag(it.prio)}</dd><dt>Виконавець</dt><dd>${it.who ? esc(nameOf(it.who)) : "—"}</dd><dt>Плановий термін</dt><dd>${ymd(it.due)}</dd><dt>Оцінка, год</dt><dd>${hrs(it.est)}</dd></dl>`;
+  const reviewBox = it.status === "review" ? `<div class="callout review"><b>Готово до перевірки</b><div>Де дивитись: ${link(it.result)}</div>${owner ? `<div class="actions"><button class="btn pri sm" data-act="accept" data-busy>Прийняти</button><button class="btn sm" data-act="return" data-busy>Повернути на доопрацювання</button></div><div class="dept">Щоб повернути, спершу напишіть у полі коментаря нижче, що треба доробити.</div>` : ""}</div>` : "";
+  const lastQ = [...it.thread].reverse().find(m => m.kind === "question");
+  const clarBox = it.status === "clarify" && lastQ ? `<div class="callout clarify"><b>Питання від аналітика</b><div style="white-space:pre-wrap">${esc(lastQ.text)}</div>${owner ? '<div class="dept">Відповідайте в обговоренні нижче — заявка автоматично повернеться в роботу.</div>' : ""}</div>` : "";
+  const thread = it.thread.map(m => m.kind === "system" ? `<div class="sys">${esc(m.text)} · ${esc(nameOf(m.by))} · ${fmt(m.ts)}</div>` :
+    `<div class="msg"><span class="ava">${esc(initials(m.by))}</span><div class="b ${m.kind === "question" ? "question" : ""}"><div class="meta"><b>${esc(nameOf(m.by))}</b>${m.kind === "question" ? "<span>питання замовнику</span>" : ""}<span>${fmt(m.ts)}</span></div><div class="txt">${esc(m.text)}</div></div></div>`).join("") || '<div class="dept">Поки що без коментарів</div>';
+  return `<div class="d-head"><div class="row"><span class="mono">${esc(it.id)}</span>${pillSt(it.status)}${prioTag(it.prio)}${single ? "" : '<button class="x" data-act="close" aria-label="Закрити">✕</button>'}</div><h2>${esc(it.title)}</h2></div>
+  <div class="d-body">${clarBox}${reviewBox}
+   <div><p class="sec-h">Мета</p><div class="text-block">${esc(it.goal)}</div></div>
+   ${it.desc ? `<div><p class="sec-h">Опис</p><div class="text-block">${esc(it.desc)}</div></div>` : ""}
+   <div><p class="sec-h">Від замовника</p><dl class="facts">${facts.map(f => `<dt>${f[0]}</dt><dd>${f[1]}</dd>`).join("")}</dl></div>
+   ${analystPanel}
+   <div><p class="sec-h">Обговорення та історія</p><div class="thread">${thread}</div></div>
+   ${(an || owner) ? `<div class="compose"><textarea id="d-msg" placeholder="${an ? "Коментар або питання замовнику" : "Ваша відповідь чи уточнення"}">${esc(draft)}</textarea>
+     <div class="actions">${an ? '<label class="chk"><input type="checkbox" id="d-q"> Це питання до замовника (статус → Уточнення)</label>' : ""}<button class="btn pri sm" data-act="send" data-busy style="margin-left:auto">Надіслати</button></div></div>` :
+      '<div class="dept">Коментувати можуть аналітики і відділ, який подав заявку.</div>'}
+  </div>`;
+}
+function bindCard(it) {
+  const an = isAnalyst();
+  $("#d-msg") && $("#d-msg").addEventListener("input", e => S.draft[it.id] = e.target.value);
+  if (an) {
+    [["#d-status", "status"], ["#d-prio", "prio"], ["#d-who", "who"], ["#d-due", "due"], ["#d-est", "est"], ["#d-spent", "spent"], ["#d-result", "result"]].forEach(([sel, f]) =>
+      $(sel).addEventListener("change", e => act("update", { id: it.id, patch: { [f]: e.target.value } }, f === "status" ? `${it.id} → ${SL()[e.target.value]}` : "Збережено").catch(() => {})));
+  }
+}
+async function sendMsg() {
+  const it = S.items.find(i => i.id === S.open), t = ($("#d-msg").value || "").trim(); if (!t) return;
+  const q = $("#d-q") && $("#d-q").checked;
+  await act("comment", { id: it.id, text: t, question: q }, q ? "Питання надіслано замовнику" : "Коментар надіслано").then(() => { S.draft[it.id] = ""; const m = $("#d-msg"); if (m) m.value = ""; }).catch(() => {});
+}
+
+
+/* ---------- адміністрування ---------- */
+function vAdmin() {
+  const A = S.admin; if (!A) return "";
+  const R = S.D.roles;
+  const users = A.users.slice().sort((a, b) => (b.active - a.active) || ({ lead: 0, analyst: 1, customer: 2 }[a.role] - { lead: 0, analyst: 1, customer: 2 }[b.role]) || a.dept.localeCompare(b.dept) || a.name.localeCompare(b.name));
+  const uf = S.userFilter || "";
+  const shown = users.filter(u => !uf || u.dept === uf || (uf === "_team" && u.role !== "customer"));
+  return `<div class="adm"><div><h1>Адміністрування</h1><p class="sub">Хто має доступ до системи і від яких відділів приймаються заявки. Бачите лише ви.</p>
+   ${A.publicUrl ? `<div class="analyst" style="margin-top:4px"><p class="sec-h" style="margin:0">Загальне посилання для подачі заявок</p>
+     <div class="linkbox"><input id="pub-link" readonly value="${esc(A.publicUrl)}"><button class="btn sm" data-act="copy-pub">Копіювати</button></div>
+     <span class="hint" style="font-size:12px;color:var(--muted)">Будь-хто з цим посиланням може подати заявку. Статуси бачать лише автор заявки (за посиланням з листа), керівники відділів зі списку нижче та аналітики. Найкраще поширювати в Telegram/Viber-чатах відділів.</span></div>` : ""}
+   ${A.appUrl ? "" : `<div class="warn-box">Адреса застосунку ще не збережена — посилання для людей з'являться після того, як ви відкриєте застосунок за URL розгортання (…/exec).</div>`}</div>
+  <section><div class="adm-h"><h2>Люди <span class="mono" style="color:var(--muted)">${users.filter(u => u.active).length}</span></h2>
+     <select id="uf" class="refresh"><option value="">Усі</option><option value="_team" ${uf === "_team" ? "selected" : ""}>Команда аналітики</option>${S.D.allDepts.map(d => `<option ${uf === d ? "selected" : ""}>${esc(d)}</option>`).join("")}</select>
+     <button class="btn pri sm" data-act="user-new">+ Додати людину</button></div>
+   <div class="tbl-wrap"><table class="users"><thead><tr><th>Ім'я</th><th>Роль</th><th>Відділ</th><th>Пошта</th><th>Запрошення</th><th>Доступ</th><th></th></tr></thead><tbody>
+   ${shown.map(u => `<tr class="${u.active ? "" : "off"}" data-user="${esc(u.id)}"><td><b>${esc(u.name)}</b><div class="dept">${esc(u.title)}</div></td>
+     <td><span class="role r-${u.role}">${esc(R[u.role])}</span></td><td>${esc(u.dept) || "—"}</td><td>${esc(u.email) || '<span class="dept">не вказана</span>'}</td>
+     <td class="num">${u.invited ? (typeof u.invited === "number" ? fmt(u.invited) : esc(u.invited)) : "—"}</td>
+     <td class="keep">${u.active ? '<span class="pill" style="color:var(--st-done);background:color-mix(in srgb,var(--st-done) 13%,transparent)">Активний</span>' : '<span class="pill" style="color:var(--st-rejected);background:color-mix(in srgb,var(--st-rejected) 13%,transparent)">Вимкнено</span>'}</td>
+     <td class="keep"><button class="btn sm" data-act="user-edit" data-id="${esc(u.id)}">Відкрити</button></td></tr>`).join("") || `<tr><td colspan="7" style="color:var(--muted)">Нікого немає в цьому фільтрі</td></tr>`}
+   </tbody></table></div></section>
+  <section><div class="adm-h"><h2>Відділи</h2></div>
+   <p class="sub" style="margin-bottom:10px">Вимкнений відділ зникає з форми нової заявки, але його заявки і люди залишаються. Перейменування оновлює назву в усіх заявках і в людей.</p>
+   <div class="dept-list">${A.depts.map(d => S.editDept === d.name ?
+     `<div class="dept-row"><span class="nm"><input id="dept-rename" value="${esc(d.name)}" data-old="${esc(d.name)}"></span><button class="btn pri sm" data-act="dept-save" data-busy>Зберегти</button><button class="btn sm" data-act="dept-cancel">Скасувати</button></div>` :
+     `<div class="dept-row ${d.active ? "" : "off"}"><span class="nm">${esc(d.name)}</span><span class="st">${d.users} люд. · ${d.open} відкр. заявок</span>
+       <button class="btn sm" data-act="dept-edit" data-name="${esc(d.name)}">Перейменувати</button>
+       <button class="btn sm" data-act="dept-toggle" data-name="${esc(d.name)}" data-busy>${d.active ? "Вимкнути" : "Увімкнути"}</button></div>`).join("")}
+   </div>
+   <form class="add-dept" id="dept-add" style="margin-top:10px"><input id="dept-new" placeholder="Назва нового відділу"><button class="btn pri sm" type="submit" data-busy>Додати відділ</button></form>
+  </section></div>`;
+}
+function renderUserDrawer() {
+  const A = S.admin; if (!A) return closeCard();
+  const isNew = S.editUser === "new";
+  const u = isNew ? { id: "", name: "", email: "", role: "customer", title: "", dept: "", telegramChatId: "", active: true, link: "", invited: "" } : A.users.find(x => x.id === S.editUser);
+  if (!u) return closeCard();
+  const self = u.id === S.me.id;
+  const deptOpts = ["", "Аналітика", ...S.D.allDepts];
+  $("#drawer").innerHTML = `<div class="d-head"><div class="row"><span class="dept">${isNew ? "Нова людина" : "Профіль"}</span>${!isNew ? `<span class="role r-${u.role}">${esc(S.D.roles[u.role])}</span>` : ""}<button class="x" data-act="close" aria-label="Закрити">✕</button></div><h2>${isNew ? "Додати до системи" : esc(u.name)}</h2></div>
+  <div class="d-body"><form id="uform" class="fs" novalidate>
+   <div class="grid2">
+    <div class="fld"><label class="req" for="u-name">Ім'я та прізвище</label><input id="u-name" value="${esc(u.name)}"></div>
+    <div class="fld"><label for="u-title">Посада</label><input id="u-title" value="${esc(u.title)}" placeholder="Напр.: категорійний менеджер"></div>
+    <div class="fld"><label for="u-role">Роль</label><select id="u-role" ${self ? "disabled" : ""}>${Object.entries(S.D.roles).map(([k, t]) => `<option value="${k}" ${k === u.role ? "selected" : ""}>${t}</option>`).join("")}</select>
+      <span class="hint">Керівник відділу бачить заявки свого відділу · Аналітик виконує · Адміністратор ще й керує доступами</span></div>
+    <div class="fld"><label for="u-dept">Відділ</label><select id="u-dept">${deptOpts.map(d => `<option value="${esc(d)}" ${d === u.dept ? "selected" : ""}>${d ? esc(d) : "— оберіть"}</option>`).join("")}</select></div>
+    <div class="fld"><label for="u-email">Пошта</label><input id="u-email" type="email" value="${esc(u.email)}" placeholder="name@gmail.com"><span class="hint">Сюди приходять сповіщення і запрошення</span></div>
+    <div class="fld"><label for="u-tg">Telegram chat_id</label><input id="u-tg" value="${esc(u.telegramChatId)}" placeholder="заповнимо, коли підключимо бота"></div>
+   </div>
+   <div class="actions"><button class="btn pri" type="submit" data-busy>${isNew ? "Додати" : "Зберегти зміни"}</button></div>
+  </form>
+  ${isNew ? `<p class="dept">Після додавання система створить персональне посилання — його можна буде скопіювати або надіслати на пошту.</p>` : `
+  <div class="analyst"><p class="sec-h" style="margin:0">Доступ</p>
+   ${u.link ? `<div class="fld"><label for="u-link">Персональне посилання</label><div class="linkbox"><input id="u-link" readonly value="${esc(u.link)}"><button class="btn sm" data-act="copy-link">Копіювати</button></div>
+     <span class="hint">${u.invited ? "Запрошення надіслано: " + (typeof u.invited === "number" ? fmt(u.invited) : esc(u.invited)) : "Запрошення ще не надсилали"}</span></div>` : `<div class="warn-box">Посилання з'явиться, коли збережеться адреса застосунку.</div>`}
+   <div class="actions">
+    <button class="btn sm" data-act="user-invite" data-busy ${u.email && u.active ? "" : "disabled"}>${u.invited ? "Надіслати ще раз" : "Надіслати запрошення на пошту"}</button>
+    <button class="btn sm" data-act="user-reset" data-busy>Згенерувати нове посилання</button>
+    ${self ? "" : `<button class="btn sm ${u.active ? "warn" : ""}" data-act="user-toggle" data-busy>${u.active ? "Вимкнути доступ" : "Увімкнути доступ"}</button>`}
+   </div>
+   <span class="hint" style="font-size:12px;color:var(--muted)">Нове посилання робить старе недійсним — корисно, якщо його переслали комусь іще. Вимкнений доступ не видаляє людину з історії заявок.</span>
+  </div>`}
+  </div>`;
+  $("#drawer").hidden = false; $("#scrim").hidden = false;
+  $("#uform").addEventListener("submit", e => {
+    e.preventDefault();
+    const v = id => $(id).value.trim();
+    if (!v("#u-name")) { toast("Вкажіть ім'я"); return; }
+    const p = { id: u.id, name: v("#u-name"), title: v("#u-title"), role: self ? u.role : v("#u-role"), dept: v("#u-dept"), email: v("#u-email"), telegramChatId: v("#u-tg") };
+    if (p.role === "customer" && !p.dept) { toast("Для замовника оберіть відділ"); return; }
+    act("adminSaveUser", p, isNew ? "Додано" : "Збережено").then(st => {
+      if (isNew) { const nu = st.admin.users.filter(x => x.name === p.name).pop(); S.editUser = nu ? nu.id : null; if (!nu) closeCard(); render(); }
+    }).catch(() => {});
+  });
+}
+
+/* ---------- events ---------- */
+function go(v) { S.view = v; S.open = S.open; $("#app").innerHTML = ""; render(); window.scrollTo(0, 0); }
+document.addEventListener("click", e => {
+  const tab = e.target.closest("#tabs button"); if (tab) { go(tab.dataset.v); return; }
+  const rm = e.target.closest("[data-rmfile]"); if (rm) { S.files.splice(Number(rm.dataset.rmfile), 1); rm.parentElement.remove(); return; }
+  const o = e.target.closest("[data-open]"); if (o) { openCard(o.dataset.open); return; }
+  const a = e.target.closest("[data-act]"); if (!a) return;
+  const it = S.items.find(i => i.id === S.open);
+  if (a.dataset.act === "close") closeCard();
+  if (a.dataset.act === "public-again") { S.publicDone = null; S.view = "new"; $("#app").innerHTML = ""; render(); window.scrollTo(0, 0); }
+  if (a.dataset.act === "user-new") { S.open = null; S.editUser = "new"; renderUserDrawer(); }
+  if (a.dataset.act === "user-edit") { S.open = null; S.editUser = a.dataset.id; renderUserDrawer(); }
+  if (a.dataset.act === "user-invite") act("adminInvite", { id: S.editUser }, "Запрошення надіслано").catch(() => {});
+  if (a.dataset.act === "user-reset") act("adminResetLink", { id: S.editUser }, "Нове посилання створено, старе більше не працює").catch(() => {});
+  if (a.dataset.act === "user-toggle") act("adminToggleUser", { id: S.editUser }, "Доступ змінено").catch(() => {});
+  if (a.dataset.act === "copy-pub") { const inp = $("#pub-link"); inp.select(); (navigator.clipboard ? navigator.clipboard.writeText(inp.value).then(() => toast("Посилання скопійовано")) : Promise.reject()).catch(() => { try { document.execCommand("copy"); toast("Посилання скопійовано"); } catch (e) { toast("Виділено — натисніть Ctrl+C"); } }); }
+  if (a.dataset.act === "copy-link") { const inp = $("#u-link"); inp.select(); const done = () => toast("Посилання скопійовано");
+    (navigator.clipboard ? navigator.clipboard.writeText(inp.value).then(done) : Promise.reject()).catch(() => { try { document.execCommand("copy"); done(); } catch (e) { toast("Виділено — натисніть Ctrl+C"); } }); }
+  if (a.dataset.act === "dept-edit") { S.editDept = a.dataset.name; render(); const i = $("#dept-rename"); i && i.focus(); }
+  if (a.dataset.act === "dept-cancel") { S.editDept = null; render(); }
+  if (a.dataset.act === "dept-save") { const i = $("#dept-rename"); act("adminSaveDept", { old: i.dataset.old, name: i.value.trim() }, "Відділ перейменовано").then(() => { S.editDept = null; render(); }).catch(() => {}); }
+  if (a.dataset.act === "dept-toggle") act("adminToggleDept", { name: a.dataset.name }, "Збережено").catch(() => {});
+  if (a.dataset.act === "send") sendMsg();
+  if (a.dataset.act === "accept") act("customer", { id: it.id, action: "accept" }, "Прийнято. Дякуємо!").catch(() => {});
+  if (a.dataset.act === "return") {
+    const t = ($("#d-msg").value || "").trim();
+    if (!t) { toast("Напишіть у коментарі, що саме треба доробити"); $("#d-msg").focus(); return; }
+    act("customer", { id: it.id, action: "return", text: t }, "Повернуто на доопрацювання").then(() => { S.draft[it.id] = ""; }).catch(() => {});
+  }
+});
+$("#refresh").addEventListener("click", () => act("boot", {}, "Оновлено").catch(() => {}));
+$("#scrim").addEventListener("click", closeCard);
+document.addEventListener("keydown", e => { if (e.key === "Escape") closeCard(); });
+$("#app").addEventListener("input", e => { if (e.target.id === "f-q") { S.filters.q = e.target.value; const pos = e.target.selectionStart; render(); const el = $("#f-q"); el.focus(); el.setSelectionRange(pos, pos); } });
+$("#app").addEventListener("submit", e => {
+  if (e.target.id !== "dept-add") return; e.preventDefault();
+  const n = $("#dept-new").value.trim(); if (!n) { toast("Вкажіть назву відділу"); return; }
+  act("adminSaveDept", { name: n }, "Відділ додано").catch(() => {});
+});
+$("#app").addEventListener("change", e => { if (e.target.id === "uf") { S.userFilter = e.target.value; render(); return; } const m = { "f-dept": "dept", "f-status": "status", "f-who": "who" }[e.target.id]; if (m) { S.filters[m] = e.target.value; render(); } });
+$("#app").addEventListener("dragstart", e => { const c = e.target.closest(".card"); if (c) e.dataTransfer.setData("text/plain", c.dataset.id); });
+$("#app").addEventListener("dragover", e => { const col = e.target.closest(".col"); if (col) { e.preventDefault(); document.querySelectorAll(".col.drop").forEach(x => x !== col && x.classList.remove("drop")); col.classList.add("drop"); } });
+$("#app").addEventListener("dragleave", e => { const col = e.target.closest(".col"); if (col && !col.contains(e.relatedTarget)) col.classList.remove("drop"); });
+$("#app").addEventListener("drop", e => {
+  const col = e.target.closest(".col"); if (!col) return; e.preventDefault(); col.classList.remove("drop");
+  const it = S.items.find(i => i.id === e.dataTransfer.getData("text/plain"));
+  if (it && it.status !== col.dataset.col) act("update", { id: it.id, patch: { status: col.dataset.col } }, `${it.id} → ${SL()[col.dataset.col]}`).catch(() => {});
+});
+// автооновлення раз на 3 хв, якщо користувач нічого не редагує
+setInterval(() => { if (!S.me || S.me.role === "public" || S.busy || S.view === "new" || (document.activeElement && /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName))) return;
+  call("boot").then(apply).catch(() => {}); }, 180000);
+
+act("boot").then(() => { if (OPEN_ID && S.items.some(i => i.id === OPEN_ID)) openCard(OPEN_ID); }).catch(() => {});
+</script>
+
+</body>
+</html>
