@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Заявки на звіти</title>
 <meta name="robots" content="noindex">
+<script src="https://accounts.google.com/gsi/client" async></script>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700&family=Unbounded:wght@600&family=JetBrains+Mono:wght@500&display=swap">
 <style>
 /* Layout: sticky top bar + one working area (board / list / form / load / how) + right-side drawer for a request card */
@@ -223,6 +224,8 @@ nav.tabs button.cta{color:var(--accent);font-weight:600}
 .files a{color:var(--accent)}
 .refresh{border:1px solid var(--line);background:var(--surface-2);border-radius:8px;padding:6px 10px}
 .btn[disabled]{opacity:.55;cursor:progress}
+#gsi{display:flex;align-items:center;gap:10px}
+#gsi small{color:var(--muted);font-size:12px;max-width:180px;line-height:1.3}
 .fld{align-content:start}
 a.btn{text-decoration:none;display:inline-block}
 .single{max-width:760px;margin:0 auto;background:var(--surface);border:1px solid var(--line);border-radius:14px;overflow:hidden}
@@ -255,7 +258,8 @@ table.users{min-width:900px}
   <div class="wrap top-in">
     <div class="brand"><div class="brand-mark">AN</div><div><b>Заявки на звіти</b><small>Відділ аналітики</small></div></div>
     <button class="refresh" id="refresh" title="Оновити дані">Оновити</button>
-    <div class="me"><span class="ava" id="meAva"></span><div><b id="meName"></b><small id="meTitle"></small></div></div>
+    <div id="gsi" hidden></div>
+    <div class="me"><span class="ava" id="meAva"></span><div><b id="meName"></b><small id="meTitle"></small></div><button class="refresh" id="logout" hidden title="Вийти з системи">Вийти</button></div>
   </div>
   <nav class="tabs wrap" id="tabs">
     <button data-v="board">Дошка</button>
@@ -273,15 +277,24 @@ table.users{min-width:900px}
 <div id="toast" class="toast" hidden></div>
 
 <script>
-// ▼▼▼ Вставте сюди URL введення в дію Apps Script (закінчується на /exec) ▼▼▼
+// Адреса Apps Script (введення в дію, закінчується на /exec)
 const API_URL = "https://script.google.com/macros/s/AKfycbzEuICg8E-FJApZ1UXIougeeIWdHbLXv5rxvFh8rSOLi9wjRf9AoiXgH5GbGtbJBLF3/exec";
-// ▲▲▲
 const _q = new URLSearchParams(location.search);
 const _clean = v => String(v || "").replace(/[^A-Za-z0-9]/g, "");
-const TOKEN = _clean(_q.get("k")) || (_clean(_q.get("r")) ? "r_" + _clean(_q.get("r")) : "");
+let TOKEN = (() => {
+  const k = _clean(_q.get("k")), r = _clean(_q.get("r"));
+  if (k) { try { localStorage.setItem("zv_token", k); } catch (e) { } }
+  if (k || r) { // прибираємо ключ з адресного рядка, щоб його не переслали випадково
+    const rest = new URLSearchParams(location.search); rest.delete("k");
+    if (k) history.replaceState(null, "", location.pathname + (rest.toString() ? "?" + rest : ""));
+  }
+  if (r) return "r_" + r;
+  if (k) return k;
+  try { return localStorage.getItem("zv_token") || ""; } catch (e) { return ""; }
+})();
 const OPEN_ID = String(_q.get("id") || "").replace(/[^A-Za-z0-9-]/g, "");
 
-const S = { me: null, items: [], analysts: [], names: {}, D: null, view: "board", open: null,
+const S = { pending: {}, me: null, items: [], analysts: [], names: {}, D: null, view: "board", open: null,
   filters: { dept: "", status: "", who: "", q: "" }, files: [], busy: 0, draft: {} };
 
 const $ = s => document.querySelector(s);
@@ -329,10 +342,43 @@ async function act(action, payload, okMsg) {
   catch (e) { if (e.message === "NO_ACCESS") return noAccess(); toast(e.message); render(); throw e; }
   finally { setBusy(false); }
 }
-function apply(st) { S.me = st.me; S.items = st.items; S.analysts = st.analysts; S.names = st.names; S.D = st.dicts; S.admin = st.admin; render(); }
+function apply(st) { if (st.googleClientId !== undefined) S.googleClientId = st.googleClientId; S.me = st.me; S.items = st.items; S.analysts = st.analysts; S.names = st.names; S.D = st.dicts; S.admin = st.admin; render(); }
 function noAccess() {
+  if (API_URL && TOKEN && TOKEN === store.get()) { store.clear(); location.replace(location.pathname); return; }
   $("#top").hidden = true;
   $("#app").innerHTML = `<div class="gate"><h1>Немає доступу</h1><p class="sub" style="margin:0">Посилання застаріло або доступ вимкнено. Щоб подати заявку, відкрийте загальне посилання на систему заявок; якщо ви керівник відділу — попросіть Юлію надіслати нове персональне посилання.</p></div>`;
+}
+
+/* ---------- вхід ---------- */
+const store = {
+  get() { try { return localStorage.getItem("zv_token") || ""; } catch (e) { return ""; } },
+  set(t) { try { localStorage.setItem("zv_token", t); } catch (e) { } },
+  clear() { try { localStorage.removeItem("zv_token"); } catch (e) { } }
+};
+let gsiReady = false;
+function renderGsi() {
+  const box = $("#gsi"); if (!box) return;
+  const cid = S.googleClientId;
+  const show = S.me && S.me.role === "public" && cid && window.google && google.accounts && google.accounts.id && API_URL;
+  box.hidden = !show; if (!show) return;
+  if (!gsiReady) { google.accounts.id.initialize({ client_id: cid, callback: onGoogleCredential, auto_select: false, ux_mode: "popup" }); gsiReady = true; }
+  if (!box.dataset.done) {
+    box.innerHTML = `<small>Для керівників відділів і аналітиків</small><div id="gsiBtn"></div>`;
+    google.accounts.id.renderButton($("#gsiBtn"), { theme: "outline", size: "medium", text: "signin_with", locale: "uk" });
+    box.dataset.done = "1";
+  }
+}
+function onGoogleCredential(resp) {
+  setBusy(true);
+  call("googleLogin", { credential: resp.credential })
+    .then(st => { TOKEN = st.token; store.set(st.token); S.publicDone = null; S.view = "board"; $("#app").innerHTML = ""; apply(st); toast("Вітаємо, " + st.me.name + "!"); })
+    .catch(e => toast(e.message))
+    .finally(() => setBusy(false));
+}
+function logout() {
+  store.clear();
+  try { google.accounts.id.disableAutoSelect(); } catch (e) { }
+  location.replace(location.pathname);
 }
 
 /* ---------- views ---------- */
@@ -341,6 +387,8 @@ function render() {
   $("#top").hidden = false;
   const guest = isGuest();
   $("#tabs").hidden = guest; $("#refresh").hidden = S.me.role === "public"; $(".me").hidden = guest;
+  $("#logout").hidden = !(API_URL && store.get());
+  renderGsi();
   if (S.me.role === "public") { if (S.view !== "new" || !$("#nf")) { S.view = "new"; $("#app").innerHTML = S.publicDone ? vDone() : vNew(); if (!S.publicDone) bindForm(); } return; }
   if (S.me.role === "requester") { const it = S.items[0]; if (!it) return noAccess(); S.open = it.id;
     $("#app").innerHTML = `<div class="single">${cardHtml(it, true)}</div>`; bindCard(it); return; }
@@ -351,7 +399,7 @@ function render() {
   if (S.view === "admin" && !isLead()) S.view = "board";
   const v = { board: vBoard, mine: vMine, list: vList, new: vNew, load: vLoad, how: vHow, admin: vAdmin }[S.view] || vBoard;
   if (S.view === "new" && $("#nf")) { /* форму не перемальовуємо, щоб не губити введене */ }
-  else { $("#app").innerHTML = v(); if (S.view === "new") bindForm(); }
+  else { const y = window.scrollY; $("#app").innerHTML = v(); if (S.view === "new") bindForm(); else if (y) window.scrollTo(0, y); }
   if (S.open) renderDrawer(); else if (S.editUser) renderUserDrawer();
 }
 
@@ -410,6 +458,7 @@ function vNew() {
       <div class="fld"><label class="${pub ? "req" : ""}" for="n-email">${pub ? "Ваша пошта" : "Пошта замовника"}</label><input id="n-email" type="email" autocomplete="email" placeholder="name@gmail.com"><span class="hint">Сюди прийде посилання на заявку і сповіщення</span></div>`}
       <div class="fld"><label class="req" for="n-dept">Відділ</label>${dept ? `<input id="n-dept" value="${esc(dept)}" disabled>` : `<select id="n-dept"><option value="">— оберіть відділ</option>${D.depts.map(d => `<option>${esc(d)}</option>`).join("")}</select>`}</div>
       <div class="fld"><label for="n-contact">Телефон або Telegram</label><input id="n-contact" placeholder="Необов'язково"></div>
+      <div class="fld" style="grid-column:1/-1"><label for="n-cc">Копія сповіщення про готовність</label><input id="n-cc" type="text" inputmode="email" placeholder="Пошта колеги чи підлеглого; кілька — через кому"><span class="hint">Ця людина отримає лист, коли звіт буде готовий і коли заявку закриють. Необов'язково, до 5 адрес.</span></div>
       <input id="n-web" name="website" tabindex="-1" autocomplete="off" style="position:absolute;left:-5000px" aria-hidden="true">
     </div>
     <div class="fld"><label class="req">Тип заявки</label>${seg("n-type", Object.entries(D.types), "report")}</div>
@@ -449,10 +498,12 @@ function bindForm() {
     const v = id => ($(id) ? $(id).value.trim() : ""), rv = n => (document.querySelector(`input[name="${n}"]:checked`) || {}).value;
     if (S.me.role === "public" && (!v("#n-req") || !v("#n-email"))) { toast("Вкажіть своє ім'я і пошту — на неї прийде посилання на заявку"); return; }
     if (!v("#n-dept")) { toast("Оберіть відділ"); return; }
+    const ccBad = v("#n-cc").split(/[\s,;]+/).filter(Boolean).filter(e => !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e));
+    if (ccBad.length) { toast("Перевірте пошту для копії: " + ccBad.join(", ")); $("#n-cc").focus(); return; }
     if (!v("#n-title") || !v("#n-goal")) { toast("Заповніть назву і мету — без мети аналітик не зможе оцінити заявку"); return; }
     let files;
     try { files = await readFiles(S.files); } catch (err) { toast(err.message); return; }
-    const p = { dept: v("#n-dept"), contact: v("#n-contact"), requester: v("#n-req"), requesterEmail: v("#n-email"), website: v("#n-web"), type: rv("n-type"), title: v("#n-title"), goal: v("#n-goal"), desc: v("#n-desc"),
+    const p = { dept: v("#n-dept"), contact: v("#n-contact"), requester: v("#n-req"), requesterEmail: v("#n-email"), cc: v("#n-cc"), website: v("#n-web"), type: rv("n-type"), title: v("#n-title"), goal: v("#n-goal"), desc: v("#n-desc"),
       format: v("#n-format"), freq: v("#n-freq"), wanted: v("#n-wanted"), sources: v("#n-sources"), biz: rv("n-biz"), drive: v("#n-drive"), files };
     const st = await act("create", p, s => `Заявку ${s.lastId || ""} створено`).catch(() => null);
     if (!st) return;
@@ -515,12 +566,27 @@ function vHow() {
 
 /* ---------- drawer ---------- */
 function openCard(id) { S.editUser = null; S.open = id; renderDrawer(); }
-function closeCard() { S.open = null; S.editUser = null; $("#drawer").hidden = true; $("#scrim").hidden = true; }
+function closeCard() {
+  const id = S.open;
+  if (id && S.pending[id] && Object.keys(S.pending[id]).length) saveAnalyst(id); // незбережене зберігаємо при закритті
+  S.open = null; S.editUser = null; $("#drawer").hidden = true; $("#scrim").hidden = true;
+}
 function renderDrawer() {
   const it = S.items.find(i => i.id === S.open); if (!it) return closeCard();
+  const body = $("#drawer .d-body"), same = $("#drawer").dataset.id === it.id, top = body && same ? body.scrollTop : 0;
   $("#drawer").innerHTML = cardHtml(it, false);
+  $("#drawer").dataset.id = it.id;
   $("#drawer").hidden = false; $("#scrim").hidden = false;
+  if (top) $("#drawer .d-body").scrollTop = top;
   bindCard(it);
+}
+const AN_FIELDS = [["#d-status", "status"], ["#d-prio", "prio"], ["#d-who", "who"], ["#d-due", "due"], ["#d-est", "est"], ["#d-spent", "spent"], ["#d-result", "result"]];
+function anVal(it, f) { const p = S.pending[it.id]; return p && f in p ? p[f] : it[f]; }
+function saveAnalyst(id) {
+  const patch = S.pending[id]; if (!patch || !Object.keys(patch).length) return Promise.resolve();
+  const it = S.items.find(i => i.id === id);
+  const msg = "status" in patch && it ? `${id} → ${SL()[patch.status]}` : "Збережено";
+  return act("update", { id, patch }, msg).then(() => { delete S.pending[id]; if (S.open === id) renderDrawer(); }).catch(() => {});
 }
 function cardHtml(it, single) {
   const an = isAnalyst(), owner = isOwner(it), D = S.D;
@@ -528,21 +594,23 @@ function cardHtml(it, single) {
   void single;
   const opt = (o, cur) => o.map(([v, t]) => `<option value="${esc(v)}" ${v === cur ? "selected" : ""}>${esc(t)}</option>`).join("");
   const link = u => /^https?:\/\//.test(u) ? `<a href="${esc(u)}" target="_blank" rel="noopener">${esc(u)}</a>` : esc(u);
-  const facts = [["Відділ", esc(it.dept)], ["Подав", esc(it.requester || nameOf(it.createdBy))], ...(it.requesterEmail ? [["Пошта", esc(it.requesterEmail)]] : []), ["Телефон / Telegram", esc(it.contact) || "—"], ["Тип", esc(D.types[it.type] || "")], ["Формат", esc(it.format) || "—"], ["Періодичність", esc(it.freq) || "—"],
+  const facts = [["Відділ", esc(it.dept)], ["Подав", esc(it.requester || nameOf(it.createdBy))], ...(it.requesterEmail ? [["Пошта", esc(it.requesterEmail)]] : []), ...(it.cc ? [["Копія про готовність", esc(it.cc)]] : []), ["Телефон / Telegram", esc(it.contact) || "—"], ["Тип", esc(D.types[it.type] || "")], ["Формат", esc(it.format) || "—"], ["Періодичність", esc(it.freq) || "—"],
     ["Бажаний термін", ymd(it.wanted)], ["Важливість", esc(D.biz[it.biz] || "—")], ["Джерела даних", esc(it.sources) || "—"],
     ["Посилання", it.drive ? link(it.drive) : "—"],
     ["Вкладення", it.files.length ? `<div class="files">${it.files.map(f => `<div><a href="${esc(f.url)}" target="_blank" rel="noopener">${esc(f.name)}</a></div>`).join("")}</div>` : "—"],
     ["Папка заявки", it.folderUrl ? `<a href="${esc(it.folderUrl)}" target="_blank" rel="noopener">Відкрити на Google Диску</a>` : "—"], ["Створено", fmt(it.created)]];
+  const dirty = !!(S.pending[it.id] && Object.keys(S.pending[it.id]).length);
   const analystPanel = an ? `<div class="analyst"><p class="sec-h" style="margin:0">Робота аналітика</p>
      <div class="grid2">
-      <div class="fld"><label for="d-status">Статус</label><select id="d-status">${opt(STATUS_ORDER.map(k => [k, SL()[k]]), it.status)}</select></div>
-      <div class="fld"><label for="d-prio">Пріоритет</label><select id="d-prio">${opt([["", "— не задано"], ["P1", "P1 — терміново"], ["P2", "P2 — високий"], ["P3", "P3 — плановий"], ["P4", "P4 — коли буде час"]], it.prio)}</select></div>
-      <div class="fld"><label for="d-who">Виконавець</label><select id="d-who">${opt([["", "— не призначено"], ...S.analysts.map(a => [a.id, a.name])], it.who)}</select></div>
-      <div class="fld"><label for="d-due">Плановий термін</label><input type="date" id="d-due" value="${esc(it.due)}"></div>
-      <div class="fld"><label for="d-est">Оцінка, год</label><input type="number" min="0" step="0.5" id="d-est" value="${esc(it.est)}"></div>
-      <div class="fld"><label for="d-spent">Витрачено, год</label><input type="number" min="0" step="0.5" id="d-spent" value="${esc(it.spent)}"></div>
+      <div class="fld"><label for="d-status">Статус</label><select id="d-status">${opt(STATUS_ORDER.map(k => [k, SL()[k]]), anVal(it, "status"))}</select></div>
+      <div class="fld"><label for="d-prio">Пріоритет</label><select id="d-prio">${opt([["", "— не задано"], ["P1", "P1 — терміново"], ["P2", "P2 — високий"], ["P3", "P3 — плановий"], ["P4", "P4 — коли буде час"]], anVal(it, "prio"))}</select></div>
+      <div class="fld"><label for="d-who">Виконавець</label><select id="d-who">${opt([["", "— не призначено"], ...S.analysts.map(a => [a.id, a.name])], anVal(it, "who"))}</select></div>
+      <div class="fld"><label for="d-due">Плановий термін</label><input type="date" id="d-due" value="${esc(anVal(it, "due"))}"></div>
+      <div class="fld"><label for="d-est">Оцінка, год</label><input type="number" min="0" step="0.5" id="d-est" value="${esc(anVal(it, "est"))}"></div>
+      <div class="fld"><label for="d-spent">Витрачено, год</label><input type="number" min="0" step="0.5" id="d-spent" value="${esc(anVal(it, "spent"))}"></div>
      </div>
-     <div class="fld"><label for="d-result">Де перевірити результат</label><input id="d-result" value="${esc(it.result)}" placeholder="Посилання на звіт або шлях: Power BI → робоча область → звіт"></div>
+     <div class="fld"><label for="d-result">Де перевірити результат</label><input id="d-result" value="${esc(anVal(it, "result"))}" placeholder="Посилання на звіт або шлях: Power BI → робоча область → звіт"></div>
+     <div class="actions"><button class="btn pri sm" data-act="save-an" ${dirty ? "" : "disabled"}>Зберегти зміни</button><span class="dept" id="an-hint">${dirty ? "Є незбережені зміни" : "Змінюйте поля — збережеться все разом"}</span></div>
    </div>` : `<dl class="facts"><dt>Пріоритет</dt><dd>${prioTag(it.prio)}</dd><dt>Виконавець</dt><dd>${it.who ? esc(nameOf(it.who)) : "—"}</dd><dt>Плановий термін</dt><dd>${ymd(it.due)}</dd><dt>Оцінка, год</dt><dd>${hrs(it.est)}</dd></dl>`;
   const reviewBox = it.status === "review" ? `<div class="callout review"><b>Готово до перевірки</b><div>Де дивитись: ${link(it.result)}</div>${owner ? `<div class="actions"><button class="btn pri sm" data-act="accept" data-busy>Прийняти</button><button class="btn sm" data-act="return" data-busy>Повернути на доопрацювання</button></div><div class="dept">Щоб повернути, спершу напишіть у полі коментаря нижче, що треба доробити.</div>` : ""}</div>` : "";
   const lastQ = [...it.thread].reverse().find(m => m.kind === "question");
@@ -550,11 +618,11 @@ function cardHtml(it, single) {
   const thread = it.thread.map(m => m.kind === "system" ? `<div class="sys">${esc(m.text)} · ${esc(nameOf(m.by))} · ${fmt(m.ts)}</div>` :
     `<div class="msg"><span class="ava">${esc(initials(m.by))}</span><div class="b ${m.kind === "question" ? "question" : ""}"><div class="meta"><b>${esc(nameOf(m.by))}</b>${m.kind === "question" ? "<span>питання замовнику</span>" : ""}<span>${fmt(m.ts)}</span></div><div class="txt">${esc(m.text)}</div></div></div>`).join("") || '<div class="dept">Поки що без коментарів</div>';
   return `<div class="d-head"><div class="row"><span class="mono">${esc(it.id)}</span>${pillSt(it.status)}${prioTag(it.prio)}${single ? "" : '<button class="x" data-act="close" aria-label="Закрити">✕</button>'}</div><h2>${esc(it.title)}</h2></div>
-  <div class="d-body">${clarBox}${reviewBox}
+  <div class="d-body">${an ? analystPanel : ""}${clarBox}${reviewBox}
    <div><p class="sec-h">Мета</p><div class="text-block">${esc(it.goal)}</div></div>
    ${it.desc ? `<div><p class="sec-h">Опис</p><div class="text-block">${esc(it.desc)}</div></div>` : ""}
    <div><p class="sec-h">Від замовника</p><dl class="facts">${facts.map(f => `<dt>${f[0]}</dt><dd>${f[1]}</dd>`).join("")}</dl></div>
-   ${analystPanel}
+   ${an ? "" : analystPanel}
    <div><p class="sec-h">Обговорення та історія</p><div class="thread">${thread}</div></div>
    ${(an || owner) ? `<div class="compose"><textarea id="d-msg" placeholder="${an ? "Коментар або питання замовнику" : "Ваша відповідь чи уточнення"}">${esc(draft)}</textarea>
      <div class="actions">${an ? '<label class="chk"><input type="checkbox" id="d-q"> Це питання до замовника (статус → Уточнення)</label>' : ""}<button class="btn pri sm" data-act="send" data-busy style="margin-left:auto">Надіслати</button></div></div>` :
@@ -565,8 +633,15 @@ function bindCard(it) {
   const an = isAnalyst();
   $("#d-msg") && $("#d-msg").addEventListener("input", e => S.draft[it.id] = e.target.value);
   if (an) {
-    [["#d-status", "status"], ["#d-prio", "prio"], ["#d-who", "who"], ["#d-due", "due"], ["#d-est", "est"], ["#d-spent", "spent"], ["#d-result", "result"]].forEach(([sel, f]) =>
-      $(sel).addEventListener("change", e => act("update", { id: it.id, patch: { [f]: e.target.value } }, f === "status" ? `${it.id} → ${SL()[e.target.value]}` : "Збережено").catch(() => {})));
+    const mark = () => {
+      const p = {};
+      AN_FIELDS.forEach(([sel, f]) => { const v = $(sel).value; if (String(v) !== String(it[f] == null ? "" : it[f])) p[f] = v; });
+      if (Object.keys(p).length) S.pending[it.id] = p; else delete S.pending[it.id];
+      const btn = $('[data-act="save-an"]'), dirty = !!S.pending[it.id];
+      if (btn) btn.disabled = !dirty;
+      const h = $("#an-hint"); if (h) h.textContent = dirty ? "Є незбережені зміни" : "Змінюйте поля — збережеться все разом";
+    };
+    AN_FIELDS.forEach(([sel]) => { $(sel).addEventListener("input", mark); $(sel).addEventListener("change", mark); });
   }
 }
 async function sendMsg() {
@@ -624,7 +699,7 @@ function renderUserDrawer() {
     <div class="fld"><label for="u-role">Роль</label><select id="u-role" ${self ? "disabled" : ""}>${Object.entries(S.D.roles).map(([k, t]) => `<option value="${k}" ${k === u.role ? "selected" : ""}>${t}</option>`).join("")}</select>
       <span class="hint">Керівник відділу бачить заявки свого відділу · Аналітик виконує · Адміністратор ще й керує доступами</span></div>
     <div class="fld"><label for="u-dept">Відділ</label><select id="u-dept">${deptOpts.map(d => `<option value="${esc(d)}" ${d === u.dept ? "selected" : ""}>${d ? esc(d) : "— оберіть"}</option>`).join("")}</select></div>
-    <div class="fld"><label for="u-email">Пошта</label><input id="u-email" type="email" value="${esc(u.email)}" placeholder="name@gmail.com"><span class="hint">Сюди приходять сповіщення і запрошення</span></div>
+    <div class="fld"><label for="u-email">Пошта</label><input id="u-email" type="email" value="${esc(u.email)}" placeholder="name@gmail.com"><span class="hint">З цією поштою людина входить через «Увійти через Google» — це має бути пошта Google-акаунта (Gmail). Сюди ж приходять сповіщення.</span></div>
     <div class="fld"><label for="u-tg">Telegram chat_id</label><input id="u-tg" value="${esc(u.telegramChatId)}" placeholder="заповнимо, коли підключимо бота"></div>
    </div>
    <div class="actions"><button class="btn pri" type="submit" data-busy>${isNew ? "Додати" : "Зберегти зміни"}</button></div>
@@ -677,6 +752,7 @@ document.addEventListener("click", e => {
   if (a.dataset.act === "dept-save") { const i = $("#dept-rename"); act("adminSaveDept", { old: i.dataset.old, name: i.value.trim() }, "Відділ перейменовано").then(() => { S.editDept = null; render(); }).catch(() => {}); }
   if (a.dataset.act === "dept-toggle") act("adminToggleDept", { name: a.dataset.name }, "Збережено").catch(() => {});
   if (a.dataset.act === "send") sendMsg();
+  if (a.dataset.act === "save-an") saveAnalyst(S.open);
   if (a.dataset.act === "accept") act("customer", { id: it.id, action: "accept" }, "Прийнято. Дякуємо!").catch(() => {});
   if (a.dataset.act === "return") {
     const t = ($("#d-msg").value || "").trim();
@@ -684,6 +760,8 @@ document.addEventListener("click", e => {
     act("customer", { id: it.id, action: "return", text: t }, "Повернуто на доопрацювання").then(() => { S.draft[it.id] = ""; }).catch(() => {});
   }
 });
+$("#logout").addEventListener("click", logout);
+window.addEventListener("load", () => { if (S.me) renderGsi(); });
 $("#refresh").addEventListener("click", () => act("boot", {}, "Оновлено").catch(() => {}));
 $("#scrim").addEventListener("click", closeCard);
 document.addEventListener("keydown", e => { if (e.key === "Escape") closeCard(); });
@@ -702,8 +780,9 @@ $("#app").addEventListener("drop", e => {
   const it = S.items.find(i => i.id === e.dataTransfer.getData("text/plain"));
   if (it && it.status !== col.dataset.col) act("update", { id: it.id, patch: { status: col.dataset.col } }, `${it.id} → ${SL()[col.dataset.col]}`).catch(() => {});
 });
+window.addEventListener("beforeunload", e => { if (Object.keys(S.pending).length) { e.preventDefault(); e.returnValue = ""; } });
 // автооновлення раз на 3 хв, якщо користувач нічого не редагує
-setInterval(() => { if (!S.me || S.me.role === "public" || S.busy || S.view === "new" || (document.activeElement && /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName))) return;
+setInterval(() => { if (!S.me || S.me.role === "public" || S.busy || S.view === "new" || S.open || Object.keys(S.pending).length || (document.activeElement && /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName))) return;
   call("boot").then(apply).catch(() => {}); }, 180000);
 
 act("boot").then(() => { if (OPEN_ID && S.items.some(i => i.id === OPEN_ID)) openCard(OPEN_ID); }).catch(() => {});
