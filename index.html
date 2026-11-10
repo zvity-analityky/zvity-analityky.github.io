@@ -314,7 +314,9 @@ const prioTag = p => p ? `<span class="prio ${p}">${p}</span>` : `<span class="p
 const hrs = v => v === "" || v == null ? "—" : v;
 const PR = { P1: 1, P2: 2, P3: 3, P4: 4 };
 const byPrio = (a, b) => (PR[a.prio] || 9) - (PR[b.prio] || 9) || a.created - b.created;
-const isOwner = it => S.me && (S.me.id === it.createdBy || (S.me.role === "customer" && S.me.dept === it.dept));
+// Власник заявки: хто її створив; керівник цього відділу; або замовник, що відкрив її за посиланням з листа (?r=) —
+// навіть якщо заявку внесла за нього Юлія. Сервер за таким посиланням повертає лише цю одну заявку.
+const isOwner = it => S.me && (S.me.id === it.createdBy || S.me.id === "req:" + it.id || (S.me.role === "customer" && S.me.dept === it.dept));
 const isMine = it => isAnalyst() ? it.who === S.me.id : true;
 const STATUS_ORDER = ["new", "clarify", "queued", "progress", "review", "done", "rejected"];
 const HINT = { new: "Чекає розбору аналітиком", clarify: "Є питання до замовника", queued: "Оцінено, чекає виконавця", review: "Замовник перевіряє результат" };
